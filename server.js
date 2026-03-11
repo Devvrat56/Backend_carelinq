@@ -105,7 +105,7 @@ app.use(express.json());
 // PostgreSQL Connection Pool using DATABASE_URL
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
 });
 
 // Test Database Connection
