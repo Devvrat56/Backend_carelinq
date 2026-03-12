@@ -16,14 +16,18 @@ load_dotenv()
 
 app = FastAPI(title="Carelinq Unified Backend (Python)")
 
-# CORS Middleware
+# CORS Middleware - Fixed for broad compatibility
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # Set to False to allow '*' origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "Carelinq Unified Backend (Python) is running"}
 
 # --- GLOBAL STATE FOR WEB SOCKETS ---
 # email -> websocket
@@ -74,8 +78,11 @@ async def startup():
         ssl_context.verify_mode = ssl.CERT_NONE
 
     try:
-        pg_pool = await asyncpg.create_pool(dsn=database_url, ssl=ssl_context)
-        print("Successfully connected to PostgreSQL")
+        if database_url:
+            pg_pool = await asyncpg.create_pool(dsn=database_url, ssl=ssl_context)
+            print("Successfully connected to PostgreSQL")
+        else:
+            print("DATABASE_URL not found in environment variables")
     except Exception as e:
         print(f"PostgreSQL connection error: {e}")
 
