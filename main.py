@@ -129,6 +129,7 @@ class LogRequest(BaseModel):
 
 # --- WEB SOCKET SIGNALING SERVER ---
 @app.websocket("/ws")
+@app.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     user_email: Optional[str] = None
@@ -193,24 +194,27 @@ failed_login_attempts: Dict[str, int] = {}
 
 @app.post("/api/login")
 async def login(req: LoginRequest):
-    email_key = req.email.lower()
+    email_key = req.email.lower().strip()
     
     # Check if user has already exceeded the maximum trials
     if failed_login_attempts.get(email_key, 0) >= 3:
+        print(f"Login blocked for {email_key}: too many attempts")
         raise HTTPException(
             status_code=403, 
             detail="Maximum login attempts exceeded. Please use forgot password or recreate the password."
         )
 
-    name = req.email.split('@')[0]
+    name = email_key.split('@')[0]
     async with pg_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", req.email)
+        # Case-insensitive search using email_key
+        user = await conn.fetchrow("SELECT * FROM users WHERE LOWER(email) = $1", email_key)
         
         if not user:
+            print(f"Registering new user: {email_key}")
             # Register new user (Mirroring server.js logic)
             user = await conn.fetchrow(
                 "INSERT INTO users (email, password, role, name) VALUES ($1, $2, $3, $4) RETURNING *",
-                req.email, req.password, req.role, name
+                email_key, req.password, req.role, name
             )
             # Initialize attempts for new user
             failed_login_attempts[email_key] = 0
@@ -219,6 +223,7 @@ async def login(req: LoginRequest):
                 # Increment failed attempts
                 failed_login_attempts[email_key] = failed_login_attempts.get(email_key, 0) + 1
                 attempts_left = 3 - failed_login_attempts[email_key]
+                print(f"Invalid password for {email_key}. Attempts remaining: {attempts_left}")
                 
                 if attempts_left <= 0:
                     raise HTTPException(
