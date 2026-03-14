@@ -188,8 +188,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # --- API ENDPOINTS ---
 
+# Memory storage to keep track of failed login attempts
+failed_login_attempts: Dict[str, int] = {}
+
 @app.post("/api/login")
 async def login(req: LoginRequest):
+    email_key = req.email.lower()
+    
+    # Check if user has already exceeded the maximum trials
+    if failed_login_attempts.get(email_key, 0) >= 3:
+        raise HTTPException(
+            status_code=403, 
+            detail="Maximum login attempts exceeded. Please use forgot password or recreate the password."
+        )
+
     name = req.email.split('@')[0]
     async with pg_pool.acquire() as conn:
         user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", req.email)
@@ -200,9 +212,28 @@ async def login(req: LoginRequest):
                 "INSERT INTO users (email, password, role, name) VALUES ($1, $2, $3, $4) RETURNING *",
                 req.email, req.password, req.role, name
             )
+            # Initialize attempts for new user
+            failed_login_attempts[email_key] = 0
         else:
             if user['password'] != req.password:
-                raise HTTPException(status_code=401, detail="Incorrect passphrase.")
+                # Increment failed attempts
+                failed_login_attempts[email_key] = failed_login_attempts.get(email_key, 0) + 1
+                attempts_left = 3 - failed_login_attempts[email_key]
+                
+                if attempts_left <= 0:
+                    raise HTTPException(
+                        status_code=403, 
+                        detail="Maximum login attempts exceeded. Please use forgot password or recreate the password."
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=401, 
+                        detail=f"Incorrect passphrase. {attempts_left} attempts remaining."
+                    )
+            
+            # Reset attempts on successful password match
+            failed_login_attempts[email_key] = 0
+
             if user['role'] != req.role:
                 raise HTTPException(
                     status_code=403, 
