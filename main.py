@@ -115,6 +115,7 @@ class MedicalSaveRequest(BaseModel):
     doctor_email: str
     patient_email: str
     transcription: str
+    summary: Optional[str] = None  # New field for AI-generated summary
     session_history: List[Any] = Field(default_factory=list)
     consult_request_details: Dict[str, Any] = Field(default_factory=dict)
 
@@ -306,6 +307,38 @@ async def log_timestamp(req: LogRequest):
     record["timestamp"] = datetime.utcnow()
     await mongodb.timestamp.insert_one(record)
     return {"success": True}
+
+# --- Retrieval Endpoints for Dashboard ---
+
+@app.get("/api/medical/history/{email}")
+async def get_medical_history(email: str):
+    """
+    Fetch all medical consultation records for a user from MongoDB.
+    Checks both patient_email and doctor_email.
+    """
+    cursor = mongodb.medical.find({
+        "$or": [
+            {"patient_email": email.lower().strip()},
+            {"doctor_email": email.lower().strip()}
+        ]
+    }).sort("timestamp", -1)
+    
+    results = await cursor.to_list(length=100)
+    for res in results:
+        res["_id"] = str(res["_id"])
+    return results
+
+@app.get("/api/chatbot/history/{email}")
+async def get_chatbot_history(email: str):
+    """Fetch chatbot conversation history for a user from MongoDB."""
+    cursor = mongodb["Chatbot conversation"].find({
+        "user_email": email.lower().strip()
+    }).sort("timestamp", -1)
+    
+    results = await cursor.to_list(length=100)
+    for res in results:
+        res["_id"] = str(res["_id"])
+    return results
 
 if __name__ == "__main__":
     import uvicorn
