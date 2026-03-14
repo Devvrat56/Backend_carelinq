@@ -188,6 +188,7 @@ failed_login_attempts: Dict[str, int] = {}
 @app.post("/api/login")
 async def login(req: LoginRequest):
     email_key = req.email.lower().strip()
+    print(f"Login attempt for: {email_key}, role: {req.role}")
     
     # Check if user has already exceeded the maximum trials
     if failed_login_attempts.get(email_key, 0) >= 3:
@@ -195,6 +196,13 @@ async def login(req: LoginRequest):
         raise HTTPException(
             status_code=403, 
             detail="Maximum login attempts exceeded. Please use forgot password or recreate the password."
+        )
+
+    if pg_pool is None:
+        print("DATABASE_URL is not set or PostgreSQL connection failed.")
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection is not available. Please check environment variables."
         )
 
     name = email_key.split('@')[0]
