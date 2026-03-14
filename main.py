@@ -87,7 +87,7 @@ async def startup():
         print(f"PostgreSQL connection error: {e}")
 
     # MongoDB Connection
-    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/Specialist_portal")
+    mongo_uri = os.getenv("MONGO_DB_URL") or os.getenv("MONGO_URI") or "mongodb://localhost:27017/Specialist_portal"
     try:
         mongo_client = AsyncIOMotorClient(mongo_uri)
         mongodb = mongo_client.get_database()
@@ -193,6 +193,7 @@ async def websocket_endpoint(websocket: WebSocket):
 failed_login_attempts: Dict[str, int] = {}
 
 @app.post("/api/login")
+@app.post("/login")
 async def login(req: LoginRequest):
     email_key = req.email.lower().strip()
     print(f"Login attempt for: {email_key}, role: {req.role}")
